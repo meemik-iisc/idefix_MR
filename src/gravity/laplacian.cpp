@@ -367,7 +367,7 @@ void Laplacian::PreComputeLaplacian() {
   IdefixArray3D<real> Ax2 = this->A[JDIR];
   IdefixArray3D<real> Ax3 = this->A[KDIR];
   IdefixArray3D<real> dV = this->dV;
-  #if GEOMETRY == POLAR
+  #if GEOMETRY == POLAR || GEOMETRY == CYLINDRICAL
   IdefixArray1D<real> r = this->x[IDIR];
   #elif GEOMETRY == SPHERICAL
   IdefixArray1D<real> r = this->x[IDIR];
@@ -387,6 +387,10 @@ void Laplacian::PreComputeLaplacian() {
       h1 = 1.;
       h2 = r(i);
       h3 = 1.;
+      #elif GEOMETRY == CYLINDRICAL
+      h1 = 1.;
+      h2 = 1.;
+      h3 = r(i);
       #else
       h1 = 1.;
       h2 = r(i);

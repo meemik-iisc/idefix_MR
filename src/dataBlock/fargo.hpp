@@ -191,6 +191,8 @@ void Fargo::AddVelocityFluid(const real t, Fluid<Phys>* hydro ) {
     constexpr int Vadv = VX2;
   #elif GEOMETRY == SPHERICAL
     constexpr int Vadv = VX3;
+  #else
+    constexpr int Vadv = Phys::nvar;  // Fargo not defined in this geometry: skip
   #endif
   if constexpr (Phys::nvar > Vadv) {
     idefix_for("FargoAddVelocity",
@@ -227,6 +229,8 @@ void Fargo::SubstractVelocityFluid(const real t, Fluid<Phys>* hydro) {
     constexpr int Vadv = VX2;
   #elif GEOMETRY == SPHERICAL
     constexpr int Vadv = VX3;
+  #else
+    constexpr int Vadv = Phys::nvar;  // Fargo not defined in this geometry: skip
   #endif
   if constexpr (Phys::nvar > Vadv) {
     idefix_for("FargoSubstractVelocity",
