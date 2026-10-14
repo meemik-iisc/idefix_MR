@@ -43,6 +43,9 @@ test/**/cmake_packages*
 test/**/
 idefix-tests.junit.xml
 
+# problem build and run directories (build files + simulation outputs)
+problems/**/build-*/
+
 # machine specific cache and hidden files
 .*
 *.DS_Store
