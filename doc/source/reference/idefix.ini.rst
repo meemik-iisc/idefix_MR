@@ -134,6 +134,12 @@ This section is used by the hydrodynamics class of *Idefix*. It defines the hydr
 +----------------+-------------------------+---------------------------------------------------------------------------------------------+
 | tracer         | integer                 | Number of passive tracers associated to the fluid. Default to 0 if not set.                 |
 +----------------+-------------------------+---------------------------------------------------------------------------------------------+
+| cooling        | string                  | | Switches on explicit optically thin radiative cooling. Only ``ism`` is available: the     |
+|                |                         | | SPEX cooling curve of Schure et al. (2009) with Koyama & Inutsuka (2002) below 10^4.2 K   |
+|                |                         | | (identical to AthenaK). Requires an energy equation, a ``[Units]`` section and a          |
+|                |                         | | ``[Cooling]`` section (see :ref:`coolingSection`). The timestep becomes                   |
+|                |                         | | CFL*min(dt_hydro, dt_cool) with dt_cool = e_int/|dE/dt|.                                  |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
 | resistivity    | string, string, (float) | | Switches on Ohmic diffusion.                                                              |
 |                |                         | | The first parameter can be ``explicit`` or ``rkl``. When ``explicit``, diffusion is       |
 |                |                         | | integrated in the main integration loop with the usual cfl restriction.  If ``rkl``,      |
@@ -310,6 +316,30 @@ of gravitational potential in the ``Gravity`` section (see :ref:`gravitySection`
 +----------------+-------------------------+---------------------------------------------------------------------------------------------+
 | skip           | int                     | | Set the number of integration cycles between each computation of self-gravity potential.  |
 |                |                         | | Default is 1 (i.e. self-gravity is computed at every cycle).                              |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
+
+.. _coolingSection:
+
+``Cooling`` section
+-------------------
+
+This section sets the parameters of the radiative cooling enabled with ``cooling`` in the ``Hydro`` section.
+The energy equation receives :math:`dE/dt = -n_e n_H\Lambda(T) + n\Gamma` with :math:`n=\rho/(\mu m_u)` and
+:math:`T = \mu m_u P/(\rho k_B)`. Assuming a fully ionised H+He plasma, :math:`n_H = X\rho/m_p` and
+:math:`n_e = (1+X)\rho/(2m_p)`, consistent with the n_e n_H normalisation of the Schure et al. (2009) table.
+
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
+|  Entry name    | Parameter type          | Comment                                                                                     |
++================+=========================+=============================================================================================+
+| mu             | float                   | | Mean molecular weight used to compute n and T. Mandatory.                                 |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
+| X              | float                   | | Hydrogen mass fraction, used to compute n_e and n_H. Default 0.7.                         |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
+| Tfloor         | float                   | | Temperature floor (K) for the cooling: cooling never brings the gas below Tfloor, and     |
+|                |                         | | cells held at the floor do not constrain the timestep. Disabled when <= 0 (default 0).    |
+|                |                         | | This is not a global temperature floor: other processes can still cool the gas below it.  |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
+| heating        | float                   | | Constant heating rate per particle (erg/s), Gamma above. Default 0.                       |
 +----------------+-------------------------+---------------------------------------------------------------------------------------------+
 
 .. _unitsSection:

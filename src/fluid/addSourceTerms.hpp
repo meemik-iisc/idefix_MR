@@ -224,6 +224,9 @@ void Fluid<Phys>::AddSourceTerms(real t, real dt) {
              data->beg[IDIR],data->end[IDIR],
             func);
 
+  // Radiative cooling last, so that the temperature floor sees all the other updates
+  if(haveCooling) cooling->AddCooling(dt);
+
   idfx::popRegion();
 }
 #endif //FLUID_ADDSOURCETERMS_HPP_

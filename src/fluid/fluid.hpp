@@ -54,6 +54,7 @@ class ThermalDiffusion;
 class BragViscosity;
 class BragThermalDiffusion;
 class Drag;
+class Cooling;
 class Tracer;
 
 
@@ -127,6 +128,10 @@ class Fluid {
   // Drag object
   bool haveDrag{false};
   std::unique_ptr<Drag> drag;
+
+  // Radiative cooling object
+  bool haveCooling{false};
+  std::unique_ptr<Cooling> cooling;
 
   // Whether or not we have to treat the axis
   bool haveAxis{false};
@@ -263,6 +268,7 @@ class Fluid {
 #include "viscosity.hpp"
 #include "bragViscosity.hpp"
 #include "drag.hpp"
+#include "cooling.hpp"
 #include "checkNan.hpp"
 #include "tracer.hpp"
 
@@ -438,6 +444,12 @@ Fluid<Phys>::Fluid(Grid &grid, Input &input, DataBlock *datain, int n) {
 
   if(input.CheckEntry(std::string(Phys::prefix),"drag")>=0) {
     haveDrag = true;
+  }
+
+  // Radiative cooling is applied as a source term
+  if(input.CheckEntry(std::string(Phys::prefix),"cooling")>=0) {
+    haveCooling = true;
+    haveSourceTerms = true;
   }
 
   if constexpr(Phys::mhd) {
@@ -755,6 +767,11 @@ Fluid<Phys>::Fluid(Grid &grid, Input &input, DataBlock *datain, int n) {
   // Drag force when needed
   if(haveDrag) {
     this->drag = std::make_unique<Drag>(input, this);
+  }
+
+  // Radiative cooling when needed
+  if(haveCooling) {
+    this->cooling = std::make_unique<Cooling>(input, this);
   }
 
   // Tracers when needed

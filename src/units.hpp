@@ -43,7 +43,8 @@ class Units {
   const real h{6.62607015e-27};                     // Planck constant (erg.s)
   const real pc{3.08568e+18};                       // Parsec (cm)
   const real au{1.49597892e13};                     // Astronomical unit (cm)
-  const real e{4.80320425e-10};                     // Elementary charge (cm^3/2 g^1/2 s^-1)
+  const real e{4.80320425e-10};
+  const real s_yr{3.1536e7};                     // Elementary charge (cm^3/2 g^1/2 s^-1)
 
 
   // User-defined units, non user-modifiable

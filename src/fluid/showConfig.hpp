@@ -172,5 +172,8 @@ void Fluid<Phys>::ShowConfig() {
   if(haveDrag) {
     drag->ShowConfig();
   }
+  if(haveCooling) {
+    cooling->ShowConfig();
+  }
 }
 #endif //FLUID_SHOWCONFIG_HPP_
