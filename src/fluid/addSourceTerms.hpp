@@ -225,7 +225,8 @@ void Fluid<Phys>::AddSourceTerms(real t, real dt) {
             func);
 
   // Radiative cooling last, so that the temperature floor sees all the other updates
-  if(haveCooling) cooling->AddCooling(dt);
+  // (when sub-cycled, cooling is applied once per cycle by the TimeIntegrator instead)
+  if(haveCooling && !cooling->subcycle) cooling->AddCooling(dt);
 
   idfx::popRegion();
 }

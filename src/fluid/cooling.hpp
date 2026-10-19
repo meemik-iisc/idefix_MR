@@ -14,6 +14,8 @@
 #ifndef FLUID_COOLING_HPP_
 #define FLUID_COOLING_HPP_
 
+#include <limits>
+#include <sstream>
 #include <string>
 #include "idefix.hpp"
 #include "input.hpp"
@@ -72,11 +74,33 @@ real ISMCoolFn(real temp) {
   return std::pow(10.0, logcool);
 }
 
-// Explicit optically thin radiative cooling (and optional constant heating)
+//----------------------------------------------------------------------------------------
+// Lambda(T) in erg cm^3 s^-1, either by linear interpolation of a float table uniform in
+// log10 T (one float log10 per call, cheap on GPUs with slow FP64) or by ISMCoolFn()
+KOKKOS_INLINE_FUNCTION
+real CoolLambda(const real temp, const bool useTab, const IdefixArray1D<float> &tab,
+                const float lt0, const float dinv, const int ntab) {
+  if(!useTab) return ISMCoolFn(temp);
+  float x = (std::log10(static_cast<float>(temp)) - lt0)*dinv;
+  x = std::fmin(std::fmax(x, 0.0f), static_cast<float>(ntab - 1) - 1.0e-3f);
+  const int i0 = static_cast<int>(x);
+  const float f = x - static_cast<float>(i0);
+  return static_cast<real>(tab(i0) + f*(tab(i0+1) - tab(i0)));
+}
+
+// Optically thin radiative cooling (and optional constant heating)
 //    dE/dt = -n_e n_H Lambda(T) + n Gamma,   with n = rho/(mu*amu)
 // Lambda is normalised to n_e n_H (Schure+09). For a fully ionised H+He plasma of
 // hydrogen mass fraction X: n_H = X rho/m_p and n_e = (1+X)/2 rho/m_p
-// Also limits the timestep to the cooling time e_int/|dE/dt|
+//
+// Two modes, selected by [Cooling] subcycle:
+//  no (default): explicit update inside every RK stage (AddCooling). The timestep is
+//                limited to CFL * t_cool,min.
+//  yes:          cooling is removed from the RK stages. After the full hydro step, the
+//                TimeIntegrator calls SubcycleCooling(), which integrates cooling over dt
+//                with nsub uniform explicit sub-steps, nsub being the SAME for every cell
+//                (no GPU warp divergence). The timestep is then only capped by
+//                dt <= nsub_max * cool_cfl * t_cool,min.
 class Cooling {
  public:
   enum class Type {ISM};
@@ -86,11 +110,32 @@ class Cooling {
   void ShowConfig();                    // print configuration
   void AddCooling(const real);          // add cooling to Uc and its constraint to InvDt
 
+  // Operator-split cooling over the full step dt, to be called after the RK stages
+  void SubcycleCooling(const real dt);
+  // Upper bound on the next dt set by the sub-cycled cooling (global over MPI ranks)
+  real GetDtCap() const;
+  // MPI-global minimum cooling time over active cells
+  // (public: CUDA forbids extended device lambdas in private member functions)
+  real MinCoolingTime();
+
   IdefixArray4D<real> Uc;
   IdefixArray4D<real> Vc;
   IdefixArray3D<real> InvDt;
 
+  bool subcycle{false};   // operator-split, sub-cycled cooling
+  int lastNsub{0};        // number of sub-steps used in the most recent cycle
+
  private:
+  // Unit conversions and rates, captured by value in the kernels
+  struct Coefs {
+    real tempUnit;        // T(K) = tempUnit * P/rho
+    real lambdaUnit;      // n_e n_H/n^2 / coolingUnit: Lambda(erg cm^3/s) -> code units
+    real gheat;           // heating rate per particle in code units
+    real Tfloor;          // temperature floor (K)
+    bool haveFloor;
+  };
+  Coefs GetCoefs() const;
+
   DataBlock* data;
   EquationOfState eos;
 
@@ -99,6 +144,25 @@ class Cooling {
   real XH;              // hydrogen mass fraction (sets n_e and n_H)
   real Tfloor;          // temperature floor (K), disabled when <= 0
   real heatingRate;     // heating rate per particle (erg/s)
+
+  // optional cooling mask on a passive tracer: cells whose tracer is below maskThreshold
+  // are not cooled and do not constrain the timestep
+  bool haveMask{false};
+  int maskTracer{-1};   // tracer number given in the input file
+  int maskIndex{0};     // index of the masking tracer in Vc
+  real maskThreshold{0};
+
+  // sub-cycling parameters
+  int nsubMax{1};       // maximum number of cooling sub-steps per hydro step
+  real coolCfl{1};      // each sub-step satisfies dt_sub <= coolCfl * t_cool,min
+  real tcoolMinPost;    // global post-cooling t_cool,min, sets the next dt cap
+
+  // tabulated cooling function (float, uniform in log10 T), used by the sub-cycled solver
+  bool useTable{false};
+  IdefixArray1D<float> coolTab;
+  float tabLogT0{0};    // log10(T) of the first entry
+  float tabDinv{1};     // 1/dlog10(T)
+  int tabN{0};          // number of entries
 };
 
 #include "fluid.hpp"
@@ -138,6 +202,45 @@ Cooling::Cooling(Input &input, Fluid<Phys> *hydroin):
   }
   this->Tfloor = input.GetOrSet<real>("Cooling","Tfloor",0,0.0);
   this->heatingRate = input.GetOrSet<real>("Cooling","heating",0,0.0);
+
+  // Optional mask: no cooling where tracer mask_tracer < mask_threshold
+  this->maskTracer = input.GetOrSet<int>("Cooling","mask_tracer",0,-1);
+  if(maskTracer >= 0) {
+    if(maskTracer >= hydroin->nTracer) {
+      std::stringstream msg;
+      msg << "Cooling: mask_tracer=" << maskTracer << " but " << blockName
+          << " has only " << hydroin->nTracer << " tracer(s)";
+      IDEFIX_ERROR(msg);
+    }
+    this->haveMask = true;
+    this->maskIndex = Phys::nvar + maskTracer;
+    this->maskThreshold = input.GetOrSet<real>("Cooling","mask_threshold",0,1.0e-3);
+  }
+
+  this->subcycle = input.GetOrSet<bool>("Cooling","subcycle",0,false);
+  this->tcoolMinPost = std::numeric_limits<real>::max();
+  if(subcycle) {
+    this->nsubMax = input.GetOrSet<int>("Cooling","nsub_max",0,100);
+    this->coolCfl = input.GetOrSet<real>("Cooling","cool_cfl",0,0.5);
+    if(nsubMax < 1 || coolCfl <= 0) {
+      IDEFIX_ERROR("Cooling: nsub_max must be >= 1 and cool_cfl > 0");
+    }
+    this->useTable = input.GetOrSet<bool>("Cooling","table",0,true);
+    if(useTable) {
+      // Lambda(T) on a uniform grid in log10 T from 10 K to 10^9 K, stored as float.
+      // Below/above that range the end values are used.
+      const double lt0 = 1.0, lt1 = 9.0, dlt = 0.002;
+      this->tabN = static_cast<int>(std::lround((lt1 - lt0)/dlt)) + 1;
+      this->tabLogT0 = static_cast<float>(lt0);
+      this->tabDinv = static_cast<float>(1.0/dlt);
+      this->coolTab = IdefixArray1D<float>("Cooling_table", tabN);
+      auto htab = Kokkos::create_mirror_view(coolTab);
+      for(int n = 0 ; n < tabN ; n++) {
+        htab(n) = static_cast<float>(ISMCoolFn(std::pow(10.0, lt0 + n*dlt)));
+      }
+      Kokkos::deep_copy(coolTab, htab);
+    }
+  }
 
   idfx::popRegion();
 }

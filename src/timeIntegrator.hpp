@@ -48,6 +48,9 @@ class TimeIntegrator {
   // Whether we have RKL
   bool haveRKL{false};
 
+  // Whether the radiative cooling is sub-cycled after the stages
+  bool haveSubcycledCooling{false};
+
   int nstages;
   // Weights of time integrator
   real w0[2];

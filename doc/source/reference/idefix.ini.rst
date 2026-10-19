@@ -341,6 +341,26 @@ The energy equation receives :math:`dE/dt = -n_e n_H\Lambda(T) + n\Gamma` with :
 +----------------+-------------------------+---------------------------------------------------------------------------------------------+
 | heating        | float                   | | Constant heating rate per particle (erg/s), Gamma above. Default 0.                       |
 +----------------+-------------------------+---------------------------------------------------------------------------------------------+
+| mask_tracer    | integer                 | | Index of a passive tracer used as a cooling mask: cells where this tracer is below        |
+|                |                         | | ``mask_threshold`` are neither cooled nor constrain the timestep. Disabled when < 0       |
+|                |                         | | (default -1).                                                                             |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
+| mask_threshold | float                   | | Tracer threshold below which cells are not cooled. Default 1e-3.                          |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
+| subcycle       | bool                    | | When ``yes``, cooling is removed from the Runge-Kutta stages and integrated once per      |
+|                |                         | | cycle, after the hydro step, with ``nsub`` explicit sub-steps of dt/nsub. ``nsub`` is     |
+|                |                         | | global, nsub = min(ceil(dt/(cool_cfl*t_cool,min)), nsub_max), so every cell does the      |
+|                |                         | | same work. The timestep is then only capped by nsub_max*cool_cfl*t_cool,min. The          |
+|                |                         | | current ``nsub`` is shown in the log. Default ``no``.                                     |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
+| nsub_max       | integer                 | | Maximum number of cooling sub-steps per cycle (``subcycle`` only). Default 100.           |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
+| cool_cfl       | float                   | | Each cooling sub-step satisfies dt_sub <= cool_cfl*t_cool,min (``subcycle`` only).        |
+|                |                         | | Default 0.5.                                                                              |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
+| table          | bool                    | | Use a single-precision table of Lambda(T), uniform in log T from 10 K to 1e9 K, in        |
+|                |                         | | the sub-cycled solver (faster on GPUs with slow FP64). Default ``yes``.                   |
++----------------+-------------------------+---------------------------------------------------------------------------------------------+
 
 .. _unitsSection:
 

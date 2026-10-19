@@ -87,6 +87,11 @@ TimeIntegrator::TimeIntegrator(Input & input, DataBlock & data) {
     haveRKL = true;
   }
 
+  // Sub-cycled radiative cooling is applied once per cycle by the integrator
+  if(data.hydro->haveCooling && data.hydro->cooling->subcycle) {
+    haveSubcycledCooling = true;
+  }
+
   // If multi-stage, create a new state in the datablock called "begin"
   if(nstages>1) {
     data.states["begin"] = StateContainer();
@@ -136,6 +141,9 @@ void TimeIntegrator::ShowLog(DataBlock &data) {
 #endif
     if(haveRKL) {
       idfx::cout << " | " << std::setw(col_width) << "RKL stages";
+    }
+    if(haveSubcycledCooling) {
+      idfx::cout << " | " << std::setw(col_width) << "cooling nsub";
     }
     if(data.haveGravity && data.gravity->haveSelfGravityPotential) {
       idfx::cout << " | " << std::setw(col_width) << "SG iterations";
@@ -188,6 +196,9 @@ void TimeIntegrator::ShowLog(DataBlock &data) {
 #endif
   if(haveRKL) {
     idfx::cout << " | " << std::setw(col_width) << data.hydro->rkl->stage;
+  }
+  if(haveSubcycledCooling) {
+    idfx::cout << " | " << std::setw(col_width) << data.hydro->cooling->lastNsub;
   }
   if(data.haveGravity && data.gravity->haveSelfGravityPotential) {
     if(ncycles>=cyclePeriod) {
@@ -368,6 +379,13 @@ void TimeIntegrator::Cycle(DataBlock &data) {
     MPI_SAFE_CALL(MPI_Wait(&dtReduce, MPI_STATUS_IGNORE));
   }
 #endif
+
+  // Operator-split radiative cooling, sub-cycled over the full step. The next timestep
+  // is capped from the post-cooling state, since newdt was computed during the stages.
+  if(haveSubcycledCooling) {
+    data.hydro->cooling->SubcycleCooling(data.dt);
+    if(!haveFixedDt) newdt = std::fmin(newdt, data.hydro->cooling->GetDtCap());
+  }
 
   if(haveRKL && (ncycles%2)==0) {    // Runge-Kutta-Legendre cycle
     data.EvolveRKLStage();
