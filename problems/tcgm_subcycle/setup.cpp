@@ -15,6 +15,7 @@ namespace{
   Mdot0, dt_mdot, 
   rinj, vinj, Volinj,
   gamma_gas, mu_gas, XH;
+  bool use_grav, inj_mom;                       // diagnostic switches
   // real rho_sink, Macc{0}, Mdot{0};         // accreted mass and rate (code units)
   void AddSourceTerms(Hydro *hydro, const real t, const real dtin);
   void AddBHGrav(Hydro *hydro, const real t, const real dtin);
@@ -93,6 +94,8 @@ Setup::Setup(Input &input, Grid &grid, DataBlock &data, Output &output) {
   gamma_gas       = gamma_;
   mu_gas          = mu_;
   XH              = input.GetOrSet<real>("Cooling","X",0,0.7);  // same default as Cooling
+  use_grav        = input.GetOrSet<bool>("Setup","grav",0,true);  // BH gravity on/off
+  inj_mom         = input.GetOrSet<bool>("Setup","inj_mom",0,true); // wind momentum on/off
 
   data.hydro->EnrollUserDefBoundary(WindZBC);
   data.hydro->EnrollUserSourceTerm(AddSourceTerms);
@@ -128,7 +131,7 @@ void MakeAnalysis(DataBlock & data) {
 
 namespace{
 void AddSourceTerms(Hydro *hydro, const real t, const real dtin){
-  AddBHGrav(hydro, t, dtin);
+  if(use_grav) AddBHGrav(hydro, t, dtin);
   AddOutflow(hydro, t, dtin);
   // No AddCGMHeating with sub-cycled cooling: the CGM is kept in thermal balance by
   // [Cooling] mask_tracer instead (cells with wind fraction < mask_threshold do not cool)
@@ -185,6 +188,7 @@ void AddOutflow(Hydro *hydro, const real t, const real dtin){
   real Volinj_  = Volinj;
   real gamma_   = gamma_gas;
   real gm1      = gamma_-1;
+  real momfac   = inj_mom ? ONE_F : ZERO_F;  // 0: wind kinetic energy goes in as heat
 
   real mdot_t   = Mdot_t(time, Mdot0_, dt_mdot_);
   real Srho     = mdot_t/Volinj_;
@@ -199,8 +203,8 @@ void AddOutflow(Hydro *hydro, const real t, const real dtin){
       real rad        = sqrt(R*R + z*z);   //r
       if(rad<rinj_){
         Uc(RHO,k,j,i) += Srho*dt;
-        Uc(MX1,k,j,i) += Srho*dt*vinj_*(R/rad);
-        Uc(MX2,k,j,i) += Srho*dt*vinj_*(z/rad);
+        Uc(MX1,k,j,i) += momfac*Srho*dt*vinj_*(R/rad);
+        Uc(MX2,k,j,i) += momfac*Srho*dt*vinj_*(z/rad);
         #if HAVE_ENERGY
         Uc(ENG,k,j,i) += Se*dt;
         // Later: cooling goes here, e.g. Uc(ENG,k,j,i) -= dt*n*n*Lambda(T);
