@@ -43,8 +43,11 @@ test/**/cmake_packages*
 test/**/
 idefix-tests.junit.xml
 
-# problem build and run directories (build files + simulation outputs)
+# problem build and run directories (build files + simulation outputs),
+# any naming: build/, build-gpu/, build_gpu_single/, build-cpu-double/, ...
+problems/**/build/
 problems/**/build-*/
+problems/**/build_*/
 
 # machine specific cache and hidden files
 .*
