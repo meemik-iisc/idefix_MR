@@ -151,3 +151,84 @@ Open choices / checks:
   (μ and v_inj = v_w/√2). Set μ = 0.6 in the script for consistency.
 - Box: half-width √3 R0 ≈ 0.6 kpc ≪ R_max = 4 kpc. R_so(0) ≈ 12–15 pc, so the 1 pc core and
   r_inj = 5 pc from §2–3 still hold.
+
+---
+
+## 6. Wide cold tail: mass budget and ballistic cold clumps
+
+Saved from Claude Code discussion (2026-11-07), after `ucgm_new_single` (uniform constant CGM,
+n = 1e-3, T = 1e6 K, Mdot = 0.1, v_w = 100 km/s, sigv = 30 km/s) ran to 60 Myr: only a ~0.5–1 kpc
+cold clump at the head (injected wind gas), hot tail (T > 1e6 K), no CGM condensation.
+Uniform CGM: t_cool ~ 1e2–1e3 Myr ≥ box crossing time (60 kpc / v_bh ≈ 60 Myr); post-bow-shock
+gas (~1e7 K, ×4 compression) is slower still. Velocity-only turbulence keeps the density uniform,
+so there are no seeds for thermal instability.
+
+### 6.1 Mass budget: how wide a continuous cold column can be
+
+Cold gas in pressure balance with hot gas has a cross-section set by its mass flux:
+
+    A_cold = Mdot_cold / (rho_cold v),   rho_cold = mu m_p P / (k T_cold)
+
+With P = n k T for n = 1e-3, T = 1e6 K, T_cold = 1e4 K, v ≈ v_bh = 1000 km/s:
+
+- n_cold ≈ 0.06 cm^-3.
+- Mdot_cold = Mdot_wind = 0.1 Msun/yr → radius ≈ 150 pc, width ≈ **0.3 kpc**.
+- A solid 1 kpc cold column needs ≈ **1 Msun/yr** of cold gas (≈ 7e7 Msun over 60 Myr), about 10× the
+  M_tot < 1e7 budget.
+- Condensing CGM can't make up the gap: the CGM passing through a 1 kpc cross-section carries only
+  ≈ 0.01 Msun/yr.
+
+→ No wind or CGM parameter choice gives a solid 1 kpc cold cylinder. The §5 settings widen the
+**hot** wake. Once that gas cools it is squeezed back to the mass-budget width.
+
+### 6.2 Why the tail pinches toward the axis
+
+The wind keeps the cavity open only while its ram pressure Mdot v_w / (4 pi z^2) exceeds the
+ambient P. That stops at
+
+    z_p / R0 ≈ v_bh / c_s ≈ 6     (≈ 1.5–2 kpc behind the BH for R0 ≈ 0.23–0.3 kpc)
+
+Beyond z_p the ambient pressure closes the cavity. Cooling removes the thermal pressure that held
+it open, which makes this worse. Consistent with ucgm_new, where the tail narrows ~1–2 kpc behind the head.
+
+### 6.3 Proposed approach: ballistic cold clumps
+
+Pressure squeezes each clump but exerts no net force pushing it toward the axis. Dense clumps
+(χ ~ 100) move almost ballistically and keep their transverse velocity:
+
+    R ≈ v_R × age      (50 km/s × 10 Myr ≈ 0.5 kpc)
+
+Only v_R ~ 20–50 km/s is needed. The wind already has v_w ~ 100–300 km/s pointing outward, but a
+smooth wind is shocked at the reverse shock and loses it. Clumps pass through the shock and keep it.
+Transverse distance before drag stops a clump: ~ χ r_cl (χ = 100, r_cl = 10 pc → ~1 kpc).
+The target is therefore a wide envelope with a low cold area-filling factor (f ~ (0.3/1)^2 ~ 0.1),
+not a solid column.
+
+Design:
+
+1. **Hot envelope:** keep §5 (R0 ≈ 0.3 kpc, slow late-time wind) so the hot wake is ~1 kpc wide.
+2. **Clumpy wind:** at random times and directions, deposit discrete dense blobs in the injection
+   sphere instead of a smooth Mdot. Total Mdot unchanged. Blob density sets χ, speed v_w, and
+   direction sets v_R.
+3. **Survival/growth:** need t_cool,mix / t_cc < 1 (Gronke & Oh). Rough estimate: t_cool,mix ≈ 0.2 Myr
+   (T_mix ~ 1e5 K, n_mix ~ 1e-2) vs t_cc ≈ 0.5 Myr: borderline but favourable. Cooling must stay on
+   where tracer > ~1e-3 (current mask already allows this).
+4. **Diagnostic:** radial distribution of cold gas, weighted by cold mass, vs age (−z/v_bh). Compare
+   with the tracer envelope and with R = v_R t.
+
+Open issues / checks:
+
+- **2D axisymmetry:** clumps are rings. That's fine for radial spreading, but rings aren't really
+  clumps, and anything near the axis is still focused there artificially. A final check needs 3D.
+- **Resolution:** ≥ ~8 cells per clump diameter. At 7.8 pc far-field cells → r_cl ≳ 30–60 pc there.
+  The 1 pc core is fine near the head.
+- **Cheap first test (no BH):** in `turb_box`, launch a few cold rings with v_R = 30–50 km/s into
+  the −1000 km/s hot flow. Check that they keep their radius and survive.
+- **Sanity check on existing data:** measure the cold column width in tcgm / ucgm_new outputs and
+  compare with the ~0.3 kpc pressure-balance estimate.
+
+Weaker alternatives:
+
+- **Pulsed wind:** Mdot bursts make shells larger than the steady R0, which cool into rings.
+- **Magnetic support:** MHD with field in the cold gas so it compresses less. Heavier, and a toroidal
+  field in 2D pinches toward the axis.
